@@ -1,7 +1,11 @@
 import pandas as pd
 import requests
 import bs4
+from urllib.parse import urlparse, parse_qs
 from typing import Dict, Any, Optional
+import time
+
+
 
 def get_headers(url_type:str) -> Optional[Dict[str,Any]]:
     """
@@ -82,3 +86,36 @@ def get_tiger_mortality_data() -> pd.DataFrame:
     tiger_mortality_data = pd.concat(mortality_data, ignore_index=True)
 
     return tiger_mortality_data
+
+def get_tiger_occurrences_data() -> pd.DataFrame:
+    """
+    Gets the tiger occurrence data from gbif.org
+    This data is crowdsourced & is not official. It has been as reported by the people on Facebook.
+
+    Returns:
+    tiger_occurrence_data (pd.DataFrame): A dataframe with the list of tiger occurrence.
+    """
+
+    intial_url = "https://www.gbif.org/api/occurrence/search?advanced=false&dataset_key=ff8a7785-27c8-4162-907e-658e28a09ba1&dwca_extension.facetLimit=1000&facet=dataset_key&facetMultiselect=true&geometry=POLYGON((58.18284+12.21440,103.21691+12.21440,103.21691+30.22032,58.18284+30.22032,58.18284+12.21440))&has_coordinate=true&has_geospatial_issue=false&issue.facetLimit=1000&locale=en&month.facetLimit=12&occurrence_status=present&offset=40&type_status.facetLimit=1000"
+
+    params = parse_qs(urlparse(intial_url).query)
+    url = "https://www.gbif.org/api/occurrence/search"
+    params['offset'] = 0
+    params['limit'] = 300 # max limit is 300
+
+    tiger_occurrence_data = []
+    while True:
+        print(f"Fetching data from {params['offset']} to {params['offset'] + params['limit']}")
+        response = requests.get(url, params=params)
+        data = response.json()
+        tiger_occurrence_data.append(pd.DataFrame(data['results']))
+        if data['endOfRecords']:
+            break
+        params['offset'] += params['limit']
+        time.sleep(10)
+    
+    tiger_occurrence_data = pd.concat(tiger_occurrence_data, ignore_index=True)
+    assert tiger_occurrence_data['species'].unique() == 'Panthera tigris'
+
+    return tiger_occurrence_data
+
